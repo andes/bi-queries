@@ -19,7 +19,8 @@ import {
 } from '@loopback/rest';
 import { Consultas } from '../models';
 import { ConsultasRepository } from '../repositories';
-
+import * as moment from 'moment';
+import { watchFile } from 'fs';
 export class ConsultasController {
   constructor(
     @repository(ConsultasRepository)
@@ -39,10 +40,47 @@ export class ConsultasController {
     },
   })
   async querybyName(
-    @param.query.object('filter', getFilterSchemaFor(Consultas)) filter?: Filter<Consultas>,
-  ): Promise<Consultas[]> {
-    // Seguir laburando acá!!!
-    return this.consultasRepository.find(filter);
+    @param.path.string('nombre') nombre: string,
+  ) {
+    let data: any = await this.consultasRepository.find({ where: { nombre: nombre } });
+    console.log('la data: ', data);
+    if (!this.consultasRepository.dataSource.connected) { await this.consultasRepository.dataSource.connect(); }
+    // let result = await this.consultasRepository.dataSource.connector!.client(this.consultasRepository.dataSource.settings.database).collection('agenda')
+    //   .aggregate([
+    //     { "$match": {} }
+    //   ]);
+    // const result = await new Promise((resolve, reject) => {
+    //   this.consultasRepository.dataSource.execute('agenda', 'aggregate', [
+    //     { "$match": {} }
+    //   ]//,
+    //     // (err, data) => {
+    //     //   if (err) reject(err);
+    //     //   else resolve(data);
+    //     // });
+    // });
+    var res = await this.consultasRepository.dataSource.connector!.connect(async function (err, db) {
+      // console.log('entro al connect');
+      var collection = db.collection(data[0].coleccion); //name of db collection
+      console.log('data.query ', data[0]);
+      // console.log('collection ', collection);
+
+
+      var respuesta = await collection.aggregate([{ $match: { createdAt: { $gte: moment('2019-10-11 12:30:00.000-03:00').toDate() } } }, { $limit: 5 }]);
+      // TODO: como se cual es la fecha por la que debo reemplazar "fechaInicio"? Conviene pasar por parametros un fechaInicio=fecha y reemplazo fecha en fechaInicio en el string del aggregate?
+      console.log('respuesta: ', await respuesta.toArray()); // la obtengo bien
+
+      return await respuesta.toArray();
+    });
+    console.log('res', res); // undefined
+    return res;
+  }
+
+  wait(ms: number) {
+    var start = new Date().getTime();
+    var end = start;
+    while (end < start + ms) {
+      end = new Date().getTime();
+    }
   }
 
 
