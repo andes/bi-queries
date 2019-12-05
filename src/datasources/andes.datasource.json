@@ -1,11 +1,12 @@
 {
   "name": "andes",
   "connector": "mongodb",
-  "url": "mongodb://localhost:27017/andes",
-  "host": "localhost",
+  "url": "",
+  "host": "10.1.62.19",
   "port": 27017,
-  "user": "",
-  "password": "",
+  "user": "admin",
+  "password": "golitoMon04",
   "database": "andes",
+  "authSource": "admin",
   "useNewUrlParser": true
 }

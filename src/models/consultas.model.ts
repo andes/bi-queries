@@ -6,7 +6,7 @@ export class Consultas extends Entity {
     id: true,
     description: 'El identificador único de la consulta',
   })
-  id: number;
+  _id: string;
   @property({
     type: 'string',
     required: true,
@@ -24,6 +24,15 @@ export class Consultas extends Entity {
     required: true,
   })
   query: string;
+  @property({
+    type: 'string',
+    required: true,
+  })
+  argumentos: [{
+    key: string,
+    etiqueta: string,
+    tipo: string
+  }]
 
 
   constructor(data?: Partial<Consultas>) {

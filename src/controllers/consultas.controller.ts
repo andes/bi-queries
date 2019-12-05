@@ -4,6 +4,7 @@ import {
   Filter,
   repository,
   Where,
+  STRING,
 } from '@loopback/repository';
 import {
   post,
@@ -21,11 +22,26 @@ import { Consultas } from '../models';
 import { ConsultasRepository } from '../repositories';
 import * as moment from 'moment';
 import { watchFile } from 'fs';
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+
 export class ConsultasController {
   constructor(
     @repository(ConsultasRepository)
     public consultasRepository: ConsultasRepository,
   ) { }
+
+
+  // : Promise<Count> {
+  //   return this.consultasRepository.updateAll(consultas, where);
+  // }
+  @get('/getConsultas')
+  async getConsultas(
+
+  ): Promise<any> {
+    let data: any = await this.consultasRepository.find();
+    console.log("Entraaaa: ", data);
+    return data;
+  }
 
   @get('/consultas/{nombre}', {
     responses: {
@@ -41,38 +57,97 @@ export class ConsultasController {
   })
   async querybyName(
     @param.path.string('nombre') nombre: string,
+    // @param.path.string('params') params: string
   ) {
+    console.log("Nombre papa: ", nombre);
+    // console.log("Parametrosssss: ", params);
     let data: any = await this.consultasRepository.find({ where: { nombre: nombre } });
-    console.log('la data: ', data);
+
     if (!this.consultasRepository.dataSource.connected) { await this.consultasRepository.dataSource.connect(); }
-    // let result = await this.consultasRepository.dataSource.connector!.client(this.consultasRepository.dataSource.settings.database).collection('agenda')
-    //   .aggregate([
-    //     { "$match": {} }
-    //   ]);
-    // const result = await new Promise((resolve, reject) => {
-    //   this.consultasRepository.dataSource.execute('agenda', 'aggregate', [
-    //     { "$match": {} }
-    //   ]//,
-    //     // (err, data) => {
-    //     //   if (err) reject(err);
-    //     //   else resolve(data);
-    //     // });
-    // });
     var res = await this.consultasRepository.dataSource.connector!.connect(async function (err, db) {
-      // console.log('entro al connect');
       var collection = db.collection(data[0].coleccion); //name of db collection
-      console.log('data.query ', data[0]);
-      // console.log('collection ', collection);
 
+      let fechas = [{
+        fecha: '2019-11-10'
+      }, {
+        fecha: '2019-11-12'
+      }];
 
-      var respuesta = await collection.aggregate([{ $match: { createdAt: { $gte: moment('2019-10-11 12:30:00.000-03:00').toDate() } } }, { $limit: 5 }]);
-      // TODO: como se cual es la fecha por la que debo reemplazar "fechaInicio"? Conviene pasar por parametros un fechaInicio=fecha y reemplazo fecha en fechaInicio en el string del aggregate?
-      console.log('respuesta: ', await respuesta.toArray()); // la obtengo bien
+      let datosArgumentos = data[0].argumentos;
+      console.log("Argumentos: ", datosArgumentos);
+
+      let objeto = JSON.parse(data[0].query);
+
+      datosArgumentos.forEach((d: any) => {
+        console.log("Entra a datos Argumentos: ", d);
+        let index = data[0].argumentos.findIndex((a: any) => a.etiqueta === d.etiqueta);
+        let replace;
+        d.value = fechas[index].fecha;
+        console.log("D Value: ", d.value);
+        switch (data[0].argumentos[index].tipo) {
+          case 'date':
+            replace = parseDate(d.value);
+            break;
+        }
+        data[0].argumentos[index]['dato'] = replace;
+        console.log("Datata de cero: ", data[0].argumentos[index]['dato']);
+        findValues(objeto, d.key, replace);
+      });
+
+      function parseDate(fecha: any) {
+        console.log("Entra a parseDate");
+        let x = Date.parse(fecha);
+        return new Date(x);
+      }
+
+      function findValues(obj: any, key: any, argumentos: any) {
+        console.log("Entra a findValues");
+        return findValuesHelper(obj, key, argumentos);
+      }
+
+      function findValuesHelper(obj: any, key: any, data: any) {
+        console.log("Entra a findValuesHelper: ", JSON.stringify(obj) + ' -- ' + key + ' -- ' + data);
+
+        if (!obj) { return; }
+
+        if (obj instanceof Array) {
+          console.log("Entra a Instance of");
+          for (let i in obj) {
+            findValuesHelper(obj[i], key, data);
+          }
+          return;
+        }
+
+        if (obj[key]) {
+          console.log("Adentroooooo OBJ[KEYYY] ANtes: ", obj[key]);
+          obj[key] = data;
+          console.log("Adentroooooo OBJ[KEYYY] Despúes: ", obj[key]);
+        }
+        if ((typeof obj === 'object') && (obj !== null)) {
+          console.log("Entra a typeof oBJEcttt");
+          let children = Object.keys(obj);
+          console.log("Childrennnn: ", children);
+          if (children.length > 0) {
+            for (let i = 0; i < children.length; i++) {
+              findValuesHelper(obj[children[i]], key, data);
+            }
+          }
+        }
+        return;
+      }
+
+      console.log('objeto despues', JSON.stringify(objeto));
+
+      var respuesta = await collection.aggregate(objeto);
+
+      let pipe = await respuesta.toArray();
+      console.log("Pepepepe: ", pipe);
+
+      console.log('res', res); // undefined
 
       return await respuesta.toArray();
     });
-    console.log('res', res); // undefined
-    return res;
+
   }
 
   wait(ms: number) {
@@ -98,12 +173,12 @@ export class ConsultasController {
         'application/json': {
           schema: getModelSchemaRef(Consultas, {
             title: 'NewConsultas',
-            exclude: ['id'],
+            exclude: ['_id'],
           }),
         },
       },
     })
-    consultas: Omit<Consultas, 'id'>,
+    consultas: Omit<Consultas, '_id'>,
   ): Promise<Consultas> {
     return this.consultasRepository.create(consultas);
   }
@@ -162,7 +237,7 @@ export class ConsultasController {
     return this.consultasRepository.updateAll(consultas, where);
   }
 
-  @get('/consultas/{id}', {
+  @get('/consultas/{_id}', {
     responses: {
       '200': {
         description: 'Consultas model instance',
@@ -170,11 +245,11 @@ export class ConsultasController {
       },
     },
   })
-  async findById(@param.path.number('id') id: number): Promise<Consultas> {
-    return this.consultasRepository.findById(id);
+  async findById(@param.path.string('_id') _id: string): Promise<Consultas> {
+    return this.consultasRepository.findById(_id);
   }
 
-  @patch('/consultas/{id}', {
+  @patch('/consultas/{_id}', {
     responses: {
       '204': {
         description: 'Consultas PATCH success',
@@ -182,7 +257,7 @@ export class ConsultasController {
     },
   })
   async updateById(
-    @param.path.number('id') id: number,
+    @param.path.string('_id') _id: string,
     @requestBody({
       content: {
         'application/json': {
@@ -192,10 +267,10 @@ export class ConsultasController {
     })
     consultas: Consultas,
   ): Promise<void> {
-    await this.consultasRepository.updateById(id, consultas);
+    await this.consultasRepository.updateById(_id, consultas);
   }
 
-  @put('/consultas/{id}', {
+  @put('/consultas/{_id}', {
     responses: {
       '204': {
         description: 'Consultas PUT success',
@@ -203,20 +278,20 @@ export class ConsultasController {
     },
   })
   async replaceById(
-    @param.path.number('id') id: number,
+    @param.path.string('_id') _id: string,
     @requestBody() consultas: Consultas,
   ): Promise<void> {
-    await this.consultasRepository.replaceById(id, consultas);
+    await this.consultasRepository.replaceById(_id, consultas);
   }
 
-  @del('/consultas/{id}', {
+  @del('/consultas/{_id}', {
     responses: {
       '204': {
         description: 'Consultas DELETE success',
       },
     },
   })
-  async deleteById(@param.path.number('id') id: number): Promise<void> {
-    await this.consultasRepository.deleteById(id);
+  async deleteById(@param.path.string('_id') _id: string): Promise<void> {
+    await this.consultasRepository.deleteById(_id);
   }
 }
