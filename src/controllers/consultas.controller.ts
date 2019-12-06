@@ -43,7 +43,27 @@ export class ConsultasController {
     return data;
   }
 
-  @get('/consultas/{nombre}', {
+  @post('/descargarCSV/{params}')
+  async create(
+    // @param.path.number('id') id: number,
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(Consultas, {
+            title: 'NewConsultas',
+            exclude: ['_id'],
+          }),
+        },
+      },
+    })
+    todo: Omit<Consultas, '_id'>,
+  ) {
+    console.log("Respuestaaaa: ", todo);
+    return this.consultasRepository.create(todo);
+    // return this.todoListRepo.todos(id).create(todo);
+  }
+
+  @get('/csv', {
     responses: {
       '200': {
         description: 'Devuelve la consulta en mongo que tiene ese nombre',
@@ -167,7 +187,7 @@ export class ConsultasController {
       },
     },
   })
-  async create(
+  async creates(
     @requestBody({
       content: {
         'application/json': {
