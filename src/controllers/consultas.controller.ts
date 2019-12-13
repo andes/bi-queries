@@ -22,7 +22,9 @@ import { Consultas } from '../models';
 import { ConsultasRepository } from '../repositories';
 import * as moment from 'moment';
 import { watchFile } from 'fs';
-const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+// const createCsvWriter = require('csv-writer').createArrayCsvStringifier;
+// const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const createCsvStringifier = require('csv-writer').createObjectCsvStringifier;
 
 export class ConsultasController {
   constructor(
@@ -35,32 +37,167 @@ export class ConsultasController {
   //   return this.consultasRepository.updateAll(consultas, where);
   // }
   @get('/getConsultas')
-  async getConsultas(
-
-  ): Promise<any> {
+  async getConsultas(): Promise<any> {
     let data: any = await this.consultasRepository.find();
     console.log("Entraaaa: ", data);
     return data;
   }
 
-  @post('/descargarCSV/{params}')
-  async create(
-    // @param.path.number('id') id: number,
-    @requestBody({
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(Consultas, {
-            title: 'NewConsultas',
-            exclude: ['_id'],
-          }),
-        },
-      },
-    })
-    todo: Omit<Consultas, '_id'>,
-  ) {
-    console.log("Respuestaaaa: ", todo);
-    return this.consultasRepository.create(todo);
-    // return this.todoListRepo.todos(id).create(todo);
+  @post('/descargarCSV')
+  descargarCSV() {
+    // console.log("Respuestaaaa: ", JSON.stringify(nombre));
+    let capo: any;
+
+    // if (!this.consultasRepository.dataSource.connected) { await this.consultasRepository.dataSource.connect(); }
+    let res = this.consultasRepository.dataSource.connector!.connect(async function (err, db) {
+      console.log("DBBBBBBBB: ", db);
+      let datos: any = {
+        params: {
+          _id: "5de903a501ecb1b3367d7f51",
+          nombre: "Listado de Pacientes",
+          coleccion: "paciente",
+          query: [{ '$match': { '$and': [{ 'createdAt': { '$gte': '@fechaInicio', '$lte': '@fechaFin' } }] } }, { '$addFields': { 'dire': { '$slice': ['$direccion', 0, 1] } } }, { '$unwind': '$dire' }, { '$project': { '_id': 1, 'nombre': 1, 'apellido': 1, 'documento': 1, 'sexo': 1, 'fechaNacimiento': 1, 'provincia': '$dire.ubicacion.provincia.nombre', 'localidad': '$dire.ubicacion.localidad.nombre', 'calle': '$dire.valor', 'pais': '$dire.ubicacion.pais.nombre' } }],
+          argumentos: [
+            {
+              key: "$gte",
+              label: "Fecha de Inicio",
+              param: "@fechaInicio",
+              tipo: "date",
+              componente: "FechaComponent",
+              nombre: "fechaInicio",
+              valor: "2019-12-06T15:56:51.785-03:00"
+            },
+            {
+              key: "$lte",
+              label: "Fecha de Fin",
+              param: "@fechaFin",
+              tipo: "date",
+              componente: "FechaComponent",
+              nombre: "fechaFin",
+              valor: "2019-12-09T15:56:51.785-03:00"
+            }
+          ]
+        }
+      };
+
+      var collection = db.collection(datos.params.coleccion); //name of db collection
+
+      let datosArgumentos = datos.params.argumentos;
+      console.log("Argumentos: ", datosArgumentos);
+
+      let objeto = datos.params.query;
+
+      datosArgumentos.forEach((d: any) => {
+        console.log("Entra a datos Argumentos: ", d);
+        let index = datos.params.argumentos.findIndex((a: any) => a.param === d.param);
+        let replace;
+        // d.value = fechas[index].fecha;
+        console.log("D Value: ", d.valor);
+        switch (datos.params.argumentos[index].tipo) {
+          case 'date':
+            replace = parseDate(d.valor);
+            break;
+        }
+        datos.params.argumentos[index]['dato'] = replace;
+        console.log("Datata de cero: ", datos.params.argumentos[index]['dato']);
+        findValues(objeto, d.key, replace);
+      });
+
+      function parseDate(fecha: any) {
+        console.log("Entra a parseDate");
+        let x = Date.parse(fecha);
+        return new Date(x);
+      }
+
+      function findValues(obj: any, key: any, argumentos: any) {
+        console.log("Entra a findValues");
+        return findValuesHelper(obj, key, argumentos);
+      }
+
+      function findValuesHelper(obj: any, key: any, data: any) {
+        console.log("Entra a findValuesHelper: ", JSON.stringify(obj) + ' -- ' + key + ' -- ' + data);
+
+        if (!obj) { return; }
+
+        if (obj instanceof Array) {
+          console.log("Entra a Instance of");
+          for (let i in obj) {
+            findValuesHelper(obj[i], key, data);
+          }
+          return;
+        }
+
+        if (obj[key]) {
+          console.log("Adentroooooo OBJ[KEYYY] ANtes: ", obj[key]);
+          obj[key] = data;
+          console.log("Adentroooooo OBJ[KEYYY] Despúes: ", obj[key]);
+        }
+        if ((typeof obj === 'object') && (obj !== null)) {
+          console.log("Entra a typeof oBJEcttt");
+          let children = Object.keys(obj);
+          console.log("Childrennnn: ", children);
+          if (children.length > 0) {
+            for (let i = 0; i < children.length; i++) {
+              findValuesHelper(obj[children[i]], key, data);
+            }
+          }
+        }
+        return;
+      }
+
+      console.log('objeto despues', JSON.stringify(objeto));
+
+      var respuesta = await collection.aggregate(objeto);
+
+      let pipe = await respuesta.toArray();
+      console.log("Pepepepe: ", pipe);
+
+      let csv = datos.params.coleccion + '.csv';
+
+      // const csvWriter = createCsvWriter({
+      //   path: 'enviar/pacienteMpi.csv',
+      //   header: [
+      //     { id: '_id', title: 'IdPaciente' },
+      //     { id: 'documento', title: 'DNI' },
+      //     { id: 'nombre', title: 'Nombre' },
+      //     { id: 'apellido', title: 'Apellido' },
+      //     { id: 'sexo', title: 'Sexo' },
+      //     { id: 'estado', title: 'Estado' },
+      //     { id: 'fechaNacimiento', title: 'Fecha de Nacimiento' },
+      //     { id: 'fechaEmpadronamiento', title: 'Fecha de Empadronamiento' },
+      //     { id: 'provincia', title: 'Provincia' },
+      //     { id: 'localidad', title: 'Localidad' },
+      //     { id: 'calle', title: 'Calle' },
+      //     { id: 'pais', title: 'Pais' }
+      //   ]
+      // });
+
+      // csvWriter.writeRecords(pipe)       // returns a promise
+      //   .then(() => {
+      //     console.log('...Done');
+      //   });
+
+      let someObject = pipe[0] // JSON array
+      let csvHeader = []
+      for (let key in someObject) {
+        csvHeader.push({ id: key, title: key });
+      }
+
+      const csvStringifier = createCsvStringifier({
+        header: csvHeader
+      });
+
+      console.log(csvStringifier.getHeaderString());
+      // => 'NAME,LANGUAGE\n'
+      console.log(csvStringifier.stringifyRecords(pipe));
+      capo = csvStringifier.stringifyRecords(pipe);
+      console.log("Capooooooo: ", capo);
+
+      //csvStringifier.stringifyRecords(pipe);
+    });
+    console.log("Resssssssssssss: ", res);
+    return this.consultasRepository.create(capo);
+
   }
 
   @get('/csv', {
@@ -100,13 +237,13 @@ export class ConsultasController {
 
       datosArgumentos.forEach((d: any) => {
         console.log("Entra a datos Argumentos: ", d);
-        let index = data[0].argumentos.findIndex((a: any) => a.etiqueta === d.etiqueta);
+        let index = data[0].argumentos.findIndex((a: any) => a.param === d.param);
         let replace;
-        d.value = fechas[index].fecha;
-        console.log("D Value: ", d.value);
+        // d.valor = fechas[index].fecha;
+        console.log("D Value: ", d.valor);
         switch (data[0].argumentos[index].tipo) {
           case 'date':
-            replace = parseDate(d.value);
+            replace = parseDate(d.valor);
             break;
         }
         data[0].argumentos[index]['dato'] = replace;
